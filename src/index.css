@@ -1,0 +1,158 @@
+@import "tailwindcss";
+
+:root {
+  --mekawy-ink: #07111d;
+  --mekawy-navy: #0b1b2e;
+  --mekawy-navy-soft: #10243d;
+  --mekawy-blue: #10243d;
+  --mekawy-blue-bright: #173b63;
+  --mekawy-red: #d9342b;
+  --mekawy-page: #eef4fa;
+  --mekawy-border: #c9d7e6;
+}
+
+body {
+  background: var(--mekawy-page);
+}
+
+.brand-stripes {
+  display: flex;
+  gap: 4px;
+  height: 5px;
+  width: 84px;
+}
+
+.brand-stripes span {
+  display: block;
+  flex: 1;
+  transform: skewX(-24deg);
+}
+
+.brand-stripes span:nth-child(1) {
+  background: #62b6e8;
+}
+
+.brand-stripes span:nth-child(2) {
+  background: var(--mekawy-blue);
+}
+
+.brand-stripes span:nth-child(3) {
+  background: var(--mekawy-red);
+}
+
+.bg-slate-50 {
+  background-color: var(--mekawy-page) !important;
+}
+
+.bg-slate-900 {
+  background-color: var(--mekawy-ink) !important;
+}
+
+.hover\:bg-slate-800:hover {
+  background-color: var(--mekawy-navy-soft) !important;
+}
+
+.border-slate-200 {
+  border-color: var(--mekawy-border) !important;
+}
+
+.border-slate-300 {
+  border-color: #9eb4ca !important;
+}
+
+.bg-blue-600 {
+  background-color: var(--mekawy-blue) !important;
+}
+
+.hover\:bg-blue-700:hover {
+  background-color: var(--mekawy-blue-bright) !important;
+}
+
+.text-blue-600 {
+  color: #123a63 !important;
+}
+
+.border-blue-600 {
+  border-color: var(--mekawy-blue) !important;
+}
+
+.bg-blue-500 {
+  background-color: var(--mekawy-blue-bright) !important;
+}
+
+.bg-blue-50,
+.bg-blue-50\/40 {
+  background-color: #e4f2fb !important;
+}
+
+.text-slate-800 {
+  color: var(--mekawy-ink) !important;
+}
+
+.text-slate-700 {
+  color: #16283d !important;
+}
+
+.text-slate-600 {
+  color: #36506b !important;
+}
+
+.focus\:ring-blue-500:focus {
+  --tw-ring-color: var(--mekawy-blue-bright) !important;
+}
+
+button.bg-blue-600,
+button[class*="bg-blue-600"] {
+  background-color: var(--mekawy-blue) !important;
+}
+
+button.bg-blue-600:hover,
+button[class*="bg-blue-600"]:hover {
+  background-color: var(--mekawy-blue-bright) !important;
+}
+
+button.text-blue-600,
+a.text-blue-600 {
+  color: #123a63 !important;
+}
+
+button.text-blue-600:hover,
+a.text-blue-600:hover {
+  color: var(--mekawy-blue) !important;
+}
+
+input[type="checkbox"] {
+  accent-color: var(--mekawy-blue);
+}
+
+input:focus,
+select:focus,
+textarea:focus {
+  border-color: var(--mekawy-blue-bright) !important;
+  outline: 2px solid rgba(23, 59, 99, 0.18);
+  outline-offset: 1px;
+}
+
+/* Hide buttons and keep only the printable card when the browser print
+   dialog opens (used on the Quotation, Job Order, and Receipt pages) */
+@media print {
+  @page {
+    size: A4;
+    margin: 15mm;
+  }
+  .no-print {
+    display: none !important;
+  }
+  .print-area {
+    box-shadow: none !important;
+    border: none !important;
+    padding: 0 !important;
+    max-width: 100% !important;
+    width: 100% !important;
+  }
+  body {
+    background: white !important;
+    margin: 0;
+    padding: 0;
+  }
+}
