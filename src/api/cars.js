@@ -13,3 +13,11 @@ export function getCars(token, search = '') {
   const query = search ? `?search=${encodeURIComponent(search)}` : ''
   return apiRequest(`/cars${query}`, { token })
 }
+
+// ------------------------------------------------------------------------------
+// API ENDPOINT: DELETE /cars/:carId
+// ------------------------------------------------------------------------------
+export function deleteCar(token, carId) {
+  if (USE_MOCK) return Promise.resolve({ success: true })
+  return apiRequest(`/cars/${carId}`, { method: 'DELETE', token })
+}

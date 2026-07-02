@@ -3,13 +3,18 @@ import { USE_MOCK } from './config.js'
 import { mockGetServices, mockCreateService, mockUpdateService } from './mockData.js'
 
 // ------------------------------------------------------------------------------
-// Backend API endpoint: GET /services (ask your friend to add this!)
+// Backend API endpoint: GET /services
 // ------------------------------------------------------------------------------
 export async function getServices(token) {
   if (USE_MOCK) return mockGetServices()
   
-  // For now, use mock data since backend doesn't have GET /api/services yet
-  return mockGetServices()
+  const data = await apiRequest('/services', { token })
+  return data.map(service => ({
+    id: service.service_id,
+    name: service.description,
+    price: service.price,
+    active: true
+  }))
 }
 
 // ------------------------------------------------------------------------------
@@ -35,9 +40,15 @@ export async function createService(token, payload) {
 }
 
 // ------------------------------------------------------------------------------
-// Backend API endpoint: PUT /services/:id (ask your friend to add this!)
+// Backend API endpoint: PUT /services/:id
 // ------------------------------------------------------------------------------
 export async function updateService(token, id, payload) {
-  // For now, use mock data since backend doesn't have PUT /api/services yet
-  return mockUpdateService(id, payload)
+  if (USE_MOCK) return mockUpdateService(id, payload)
+  
+  const backendPayload = {
+    description: payload.name,
+    price: payload.price
+  }
+  
+  return await apiRequest(`/services/${id}`, { method: 'PUT', body: backendPayload, token })
 }

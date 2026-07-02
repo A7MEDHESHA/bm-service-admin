@@ -1,9 +1,9 @@
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Plus, Trash2 } from 'lucide-react'
+import { Plus, Trash2, RefreshCw } from 'lucide-react'
 import { useAuth } from '../../context/AuthContext.jsx'
-import { getCars } from '../../api/cars.js'
-import { addCar, deleteCustomerCar, getCustomers } from '../../api/customers.js'
+import { getCars, deleteCar } from '../../api/cars.js'
+import { addCar, getCustomers } from '../../api/customers.js'
 
 export default function CarsPage() {
   const { token } = useAuth()
@@ -12,11 +12,32 @@ export default function CarsPage() {
   const [search, setSearch] = useState('')
   const [showAddModal, setShowAddModal] = useState(false)
   const [error, setError] = useState('')
+  const [loading, setLoading] = useState(false)
 
   async function load() {
-    // API CALL: GET /cars?search=...
-    const data = await getCars(token, search)
-    setCars(data)
+    setLoading(true)
+    try {
+      // API CALL: GET /cars?search=...
+      const data = await getCars(token, search)
+      const carList = Array.isArray(data) ? (Array.isArray(data[0]) ? data[0] : data) : []
+      // Normalize cars data
+      const normalizedCars = carList.map(car => ({
+        id: car.car_id,
+        make: car.make,
+        model: car.model,
+        year: car.year,
+        plate_number: car.plate_number,
+        chassis_number: car.body_number,
+        engine_number: car.engine_number,
+        customer_id: car.fk_car_customer_id,
+        customer_name: car.customer_name || 'Unknown'
+      }))
+      setCars(normalizedCars)
+    } catch (err) {
+      setError(err.message)
+    } finally {
+      setLoading(false)
+    }
   }
 
   useEffect(() => {
@@ -24,7 +45,7 @@ export default function CarsPage() {
   }, [search])
 
   async function handleAddCar(customerId, payload) {
-    // API CALL: POST /customers/:id/cars
+    // API CALL: POST /cars/:id
     await addCar(token, customerId, payload)
     setShowAddModal(false)
     load()
@@ -38,8 +59,8 @@ export default function CarsPage() {
 
     try {
       setError('')
-      // API CALL: DELETE /customers/:customerId/cars/:carId
-      await deleteCustomerCar(token, car.customer_id, car.id)
+      // API CALL: DELETE /cars/:carId
+      await deleteCar(token, car.id)
       load()
     } catch (err) {
       setError(err.message)
@@ -58,6 +79,14 @@ export default function CarsPage() {
             onChange={(e) => setSearch(e.target.value)}
             className="px-3 py-2 border border-slate-300 rounded-md text-sm w-72"
           />
+          <button
+            onClick={load}
+            disabled={loading}
+            className="inline-flex items-center gap-2 bg-slate-100 text-slate-700 text-sm px-3 py-2 rounded-md disabled:opacity-50"
+          >
+            <RefreshCw size={16} className={loading ? 'animate-spin' : ''} />
+            Refresh
+          </button>
           <button
             onClick={() => setShowAddModal(true)}
             className="inline-flex items-center gap-2 bg-blue-600 text-white text-sm px-4 py-2 rounded-md"

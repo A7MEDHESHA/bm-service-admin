@@ -2,9 +2,9 @@ import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext.jsx'
 import { getRecentVisits } from '../api/visits.js'
-import { getParts } from '../api/parts.js'
+import { getParts, getLowStockParts } from '../api/parts.js'
 import { getCustomer, getCustomers, getStatistics } from '../api/customers.js'
-import { Users, Car, Wrench, Package, AlertTriangle, ClipboardPlus } from 'lucide-react'
+import { Users, Car, Wrench, Package, AlertTriangle, ClipboardPlus, RefreshCw } from 'lucide-react'
 
 export default function Dashboard() {
   const { token } = useAuth()
@@ -14,6 +14,7 @@ export default function Dashboard() {
   const [recentVisits, setRecentVisits] = useState([])
   const [currency, setCurrency] = useState(() => localStorage.getItem('bm_currency') || 'EGP')
   const [showOrderModal, setShowOrderModal] = useState(false)
+  const [loading, setLoading] = useState(false)
 
   useEffect(() => {
     const handleSettingsUpdate = () => {
@@ -28,36 +29,35 @@ export default function Dashboard() {
     }
   }, [])
 
-  useEffect(() => {
-    async function load() {
-      try {
-        const summaryData = await getStatistics(token)
-        // Map backend keys to frontend keys
-        const mappedSummary = {
-          total_customers: summaryData.totalCustomers,
-          total_cars: summaryData.totalCars,
-          total_services: summaryData.totalServices,
-          total_parts: summaryData.totalParts,
-        }
-        setSummary(mappedSummary)
-      } catch (err) {
-        console.error('Failed to load stats', err)
-        // Set mock summary if needed
-        setSummary({ total_customers: 0, total_cars: 0, total_services:0, total_parts:0 })
+  async function load() {
+    setLoading(true)
+    try {
+      const summaryData = await getStatistics(token)
+      // Map backend keys to frontend keys
+      const mappedSummary = {
+        total_customers: summaryData.totalCustomers,
+        total_cars: summaryData.totalCars,
+        total_services: summaryData.totalServices,
+        total_parts: summaryData.totalParts,
       }
+      setSummary(mappedSummary)
       
-      try {
-        const parts = await getParts(token)
-        // Note: parts API might not have low stock, so we'll skip that for now
-        setLowStock([])
-      } catch (err) {
-        console.error('Failed to load parts', err)
-        setLowStock([])
-      }
-
-      // Recent visits might not be available yet, so we'll show empty
-      setRecentVisits([])
+      // Get low stock parts
+      const lowStockParts = await getLowStockParts(token)
+      setLowStock(lowStockParts)
+    } catch (err) {
+      console.error('Failed to load stats', err)
+      // Set mock summary if needed
+      setSummary({ total_customers: 0, total_cars: 0, total_services:0, total_parts:0 })
+      setLowStock([])
     }
+
+    // Recent visits might not be available yet, so we'll show empty
+    setRecentVisits([])
+    setLoading(false)
+  }
+
+  useEffect(() => {
     load()
   }, [token])
 
@@ -65,6 +65,14 @@ export default function Dashboard() {
     <div>
       <div className="flex items-center justify-between mb-6">
         <h1 className="text-2xl font-bold text-slate-800">Dashboard</h1>
+        <button
+          onClick={load}
+          disabled={loading}
+          className="inline-flex items-center gap-2 bg-slate-100 text-slate-700 text-sm px-3 py-2 rounded-md disabled:opacity-50"
+        >
+          <RefreshCw size={16} className={loading ? 'animate-spin' : ''} />
+          Refresh
+        </button>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-6">

@@ -21,6 +21,21 @@ export async function getParts(token) {
   }))
 }
 
+export async function getLowStockParts(token) {
+  if (USE_MOCK) return []
+  
+  const rawParts = await apiRequest('/parts/low-stock', { token })
+  const partsList = Array.isArray(rawParts) ? (Array.isArray(rawParts[0]) ? rawParts[0] : rawParts) : []
+  
+  return partsList.map(p => ({
+    id: p.part_id,
+    name: p.description,
+    unit_price: p.price,
+    stock_quantity: p.quantity,
+    active: true
+  }))
+}
+
 // ------------------------------------------------------------------------------
 // Backend API endpoint: POST /parts
 // Backend expects: { description, price, quantity }

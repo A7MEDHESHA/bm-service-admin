@@ -183,3 +183,11 @@ export async function getStatistics(token) {
   }
   return await apiRequest('/customers/stats', { token })
 }
+
+// ------------------------------------------------------------------------------
+// Backend API endpoint: DELETE /api/customers/:customerId
+// ------------------------------------------------------------------------------
+export function deleteCustomer(token, customerId) {
+  if (USE_MOCK) return Promise.resolve({ success: true })
+  return apiRequest(`/customers/${customerId}`, { method: 'DELETE', token })
+}

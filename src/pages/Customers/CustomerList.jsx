@@ -1,9 +1,9 @@
 import { useEffect, useState } from 'react'
 import { useNavigate, useLocation } from 'react-router-dom'
 import { useAuth } from '../../context/AuthContext.jsx'
-import { getCustomers, createCustomer, addCar } from '../../api/customers.js'
+import { getCustomers, createCustomer, addCar, deleteCustomer } from '../../api/customers.js'
 import AddCustomerModal from '../../components/AddCustomerModal.jsx'
-import { RefreshCw } from 'lucide-react'
+import { RefreshCw, Trash2 } from 'lucide-react'
 
 export default function CustomerList() {
   const { token } = useAuth()
@@ -57,6 +57,20 @@ export default function CustomerList() {
     } catch (err) {
       console.error("Error adding customer:", err);
       alert("Error saving customer: " + (err.message || "Unknown error"));
+    }
+  }
+
+  async function handleDeleteCustomer(customer) {
+    const confirmed = window.confirm(
+      `Delete customer ${customer.name}? This will also delete all their cars.`
+    )
+    if (!confirmed) return
+    try {
+      await deleteCustomer(token, customer.id)
+      load()
+    } catch (err) {
+      console.error("Error deleting customer:", err)
+      alert("Error deleting customer: " + err.message)
     }
   }
 
@@ -137,6 +151,13 @@ export default function CustomerList() {
                   </button>
                   <button onClick={() => startNewOrder(c)} className="text-blue-600 text-xs">
                     New order
+                  </button>
+                  <button 
+                    onClick={() => handleDeleteCustomer(c)}
+                    className="text-red-600"
+                    title="Delete customer"
+                  >
+                    <Trash2 size={14} />
                   </button>
                 </td>
               </tr>
