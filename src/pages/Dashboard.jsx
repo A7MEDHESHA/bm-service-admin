@@ -1,9 +1,12 @@
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext.jsx'
-import { getRecentVisits } from '../api/visits.js'
+import { getCars } from '../api/cars.js'
+import { getServices } from '../api/services.js'
 import { getParts, getLowStockParts } from '../api/parts.js'
-import { getCustomer, getCustomers, getStatistics } from '../api/customers.js'
+import { getCustomer, getCustomers } from '../api/customers.js'
+import { getInvoices } from '../api/invoices.js'
+import { getQuotations } from '../api/quotations.js'
 import { Users, Car, Wrench, Package, AlertTriangle, ClipboardPlus, RefreshCw } from 'lucide-react'
 
 export default function Dashboard() {
@@ -20,7 +23,6 @@ export default function Dashboard() {
     const handleSettingsUpdate = () => {
       setCurrency(localStorage.getItem('bm_currency') || 'EGP')
     }
-    
     window.addEventListener('bm-settings-updated', handleSettingsUpdate)
     window.addEventListener('storage', handleSettingsUpdate)
     return () => {
@@ -31,29 +33,71 @@ export default function Dashboard() {
 
   async function load() {
     setLoading(true)
+
+    // Main stat cards
     try {
-      const summaryData = await getStatistics(token)
-      // Map backend keys to frontend keys
-      const mappedSummary = {
-        total_customers: summaryData.totalCustomers,
-        total_cars: summaryData.totalCars,
-        total_services: summaryData.totalServices,
-        total_parts: summaryData.totalParts,
-      }
-      setSummary(mappedSummary)
-      
-      // Get low stock parts
+      const [customers, cars, services, parts] = await Promise.all([
+        getCustomers(token),
+        getCars(token),
+        getServices(token),
+        getParts(token),
+      ])
+      setSummary({
+        total_customers: customers.length,
+        total_cars: cars.length,
+        total_services: services.length,
+        total_parts: parts.length,
+      })
+    } catch (err) {
+      console.error('Failed to load main stats', err)
+      setSummary({ total_customers: 0, total_cars: 0, total_services: 0, total_parts: 0 })
+    }
+
+    // Low stock alert
+    try {
       const lowStockParts = await getLowStockParts(token)
       setLowStock(lowStockParts)
     } catch (err) {
-      console.error('Failed to load stats', err)
-      // Set mock summary if needed
-      setSummary({ total_customers: 0, total_cars: 0, total_services:0, total_parts:0 })
+      console.error('Failed to load low stock parts', err)
       setLowStock([])
     }
+    
+    // Recent invoices with real customer/car names
+    try {
+      const [invoices, quotations, customers, cars] = await Promise.all([
+        getInvoices(token),
+        getQuotations(token, {}),
+        getCustomers(token),
+        getCars(token),
+      ])
 
-    // Recent visits might not be available yet, so we'll show empty
-    setRecentVisits([])
+      const customerById = new Map(customers.map((c) => [c.id, c]))
+      const carById = new Map(cars.map((c) => [c.id, c]))
+      const quotationById = new Map(quotations.map((q) => [q.id, q]))
+
+      const recentInvoices = invoices
+        .slice()
+        .sort((a, b) => new Date(b.issuedAt) - new Date(a.issuedAt))
+        .slice(0, 5)
+        .map((inv) => {
+          const quotation = quotationById.get(inv.quotationId)
+          const customer = quotation ? customerById.get(quotation.customerId) : null
+          const car = quotation ? carById.get(quotation.carId) : null
+          return {
+            id: inv.id,
+            customer_name: customer?.name ?? '-',
+            car_model: car ? `${car.make} ${car.model}` : '-',
+            total: quotation?.total ?? 0,
+            created_at: inv.issuedAt,
+          }
+        })
+
+      setRecentVisits(recentInvoices)
+    } catch (err) {
+      console.error('Failed to load invoices', err)
+      setRecentVisits([])
+    }
+
     setLoading(false)
   }
 
@@ -76,30 +120,10 @@ export default function Dashboard() {
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-6">
-        <StatCard 
-          label="Total customers" 
-          value={summary?.total_customers} 
-          icon={Users} 
-          color="bg-blue-500"
-        />
-        <StatCard 
-          label="Total cars" 
-          value={summary?.total_cars} 
-          icon={Car} 
-          color="bg-green-500"
-        />
-        <StatCard 
-          label="Total services" 
-          value={summary?.total_services} 
-          icon={Wrench} 
-          color="bg-purple-500"
-        />
-        <StatCard 
-          label="Total parts" 
-          value={summary?.total_parts} 
-          icon={Package} 
-          color="bg-orange-500"
-        />
+        <StatCard label="Total customers" value={summary?.total_customers} icon={Users} color="bg-blue-500" />
+        <StatCard label="Total cars" value={summary?.total_cars} icon={Car} color="bg-green-500" />
+        <StatCard label="Total services" value={summary?.total_services} icon={Wrench} color="bg-purple-500" />
+        <StatCard label="Total parts" value={summary?.total_parts} icon={Package} color="bg-orange-500" />
       </div>
 
       {lowStock.length > 0 && (
@@ -175,6 +199,13 @@ export default function Dashboard() {
                       </td>
                     </tr>
                   ))}
+                  {recentVisits.length === 0 && (
+                    <tr>
+                      <td className="px-6 py-6 text-center text-slate-400" colSpan={4}>
+                        No invoices yet
+                      </td>
+                    </tr>
+                  )}
                 </tbody>
               </table>
             </div>
@@ -220,10 +251,8 @@ function NewOrderModal({ token, onClose, onStart, onAddCustomer }) {
 
   useEffect(() => {
     async function loadCustomers() {
-      // API CALL: GET /customers?search=...
       const data = await getCustomers(token, search)
       setCustomers(data)
-
       const currentCustomerStillVisible = data.some((customer) => String(customer.id) === String(customerId))
       if (!currentCustomerStillVisible) {
         const firstCustomer = data[0]
@@ -240,8 +269,6 @@ function NewOrderModal({ token, onClose, onStart, onAddCustomer }) {
         setCustomerDetails(null)
         return
       }
-
-      // API CALL: GET /customers/:id
       const data = await getCustomer(token, customerId)
       setCustomerDetails(data)
     }
@@ -327,25 +354,9 @@ function NewOrderModal({ token, onClose, onStart, onAddCustomer }) {
               <InfoRow label="Make" value={selectedCar.make} />
               <InfoRow label="Year" value={selectedCar.year} />
               <InfoRow label="Model" value={selectedCar.model} />
-              <InfoRow label="Color" value={selectedCar.color} />
               <InfoRow label="Plate" value={selectedCar.plate_number} />
               <InfoRow label="Chassis (VIN)" value={selectedCar.chassis_number} />
               <InfoRow label="Engine number" value={selectedCar.engine_number} />
-            </div>
-            <div className="p-3 border-t border-slate-100">
-              <p className="text-xs text-slate-500 mb-2">Visit history</p>
-              {selectedCustomer.visits?.length ? (
-                <div className="space-y-2">
-                  {selectedCustomer.visits.slice(0, 3).map((visit) => (
-                    <div key={visit.id} className="flex justify-between text-sm">
-                      <span className="text-slate-600">{new Date(visit.created_at).toLocaleDateString()}</span>
-                      <span className="font-medium text-slate-800">{visit.total}</span>
-                    </div>
-                  ))}
-                </div>
-              ) : (
-                <p className="text-sm text-slate-500">No visits yet</p>
-              )}
             </div>
           </div>
         ) : (

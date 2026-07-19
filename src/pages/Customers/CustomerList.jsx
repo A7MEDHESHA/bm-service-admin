@@ -1,7 +1,10 @@
 import { useEffect, useState } from 'react'
 import { useNavigate, useLocation } from 'react-router-dom'
 import { useAuth } from '../../context/AuthContext.jsx'
-import { getCustomers, createCustomer, addCar, deleteCustomer } from '../../api/customers.js'
+import { getCustomers, createCustomer, deleteCustomer } from '../../api/customers.js'
+import { addCar } from '../../api/cars.js'
+import { getInvoices } from '../../api/invoices.js'
+import { getQuotations } from '../../api/quotations.js'
 import AddCustomerModal from '../../components/AddCustomerModal.jsx'
 import { RefreshCw, Trash2 } from 'lucide-react'
 
@@ -11,24 +14,39 @@ export default function CustomerList() {
   const location = useLocation()
   const [customers, setCustomers] = useState([])
   const [search, setSearch] = useState('')
-  // Opened directly when the Dashboard's "+ Add customer" quick action sends
-  // us here with { state: { openAddModal: true } }
   const [showModal, setShowModal] = useState(!!location.state?.openAddModal)
-  // Tracks which car is currently selected in the dropdown, per customer id,
-  // for customers that have more than one car
   const [carChoice, setCarChoice] = useState({})
   const [isRefreshing, setIsRefreshing] = useState(false)
-  
-  console.log("CustomerList component - customers state:", customers);
 
   async function load() {
     try {
       setIsRefreshing(true)
-      console.log("=== CustomerList.load() called ===");
-      // API CALL: GET /customers?search=...
       const data = await getCustomers(token, search)
-      console.log("CustomerList.load() - data received from getCustomers:", data);
-      setCustomers(data)
+
+      const [invoices, quotations] = await Promise.all([
+        getInvoices(token),
+        getQuotations(token, {}),
+      ])
+      const quotationById = new Map(quotations.map((q) => [q.id, q]))
+
+      const lastVisitByCustomerId = new Map()
+      for (const inv of invoices) {
+        const quotation = quotationById.get(inv.quotationId)
+        if (!quotation) continue
+        const existing = lastVisitByCustomerId.get(quotation.customerId)
+        if (!existing || new Date(inv.issuedAt) > new Date(existing)) {
+          lastVisitByCustomerId.set(quotation.customerId, inv.issuedAt)
+        }
+      }
+
+      const withLastVisit = data.map((c) => ({
+        ...c,
+        last_visit: lastVisitByCustomerId.get(c.id)
+          ? new Date(lastVisitByCustomerId.get(c.id)).toLocaleDateString()
+          : null,
+      }))
+
+      setCustomers(withLastVisit)
     } catch (error) {
       console.error("CustomerList.load() - ERROR:", error);
       alert("Failed to load customers: " + error.message);
@@ -37,21 +55,14 @@ export default function CustomerList() {
     }
   }
 
-  // Load customers when search or token changes
   useEffect(() => {
     load()
   }, [search, token])
 
   async function handleAdd(payload) {
     try {
-      console.log("handleAdd called with payload:", payload);
-      // First API CALL: POST /customers to create the customer
       const customerResult = await createCustomer(token, payload);
-      console.log("customerResult:", customerResult);
-      
-      // Second API CALL: POST /cars/:customerId to add the car
       await addCar(token, customerResult.id, payload.car);
-      
       setShowModal(false);
       load();
     } catch (err) {
@@ -152,7 +163,7 @@ export default function CustomerList() {
                   <button onClick={() => startNewOrder(c)} className="text-blue-600 text-xs">
                     New order
                   </button>
-                  <button 
+                  <button
                     onClick={() => handleDeleteCustomer(c)}
                     className="text-red-600"
                     title="Delete customer"

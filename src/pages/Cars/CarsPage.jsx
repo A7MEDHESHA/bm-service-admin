@@ -2,8 +2,8 @@ import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Plus, Trash2, RefreshCw } from 'lucide-react'
 import { useAuth } from '../../context/AuthContext.jsx'
-import { getCars, deleteCar } from '../../api/cars.js'
-import { addCar, getCustomers } from '../../api/customers.js'
+import { getCars, deleteCar, addCar } from '../../api/cars.js'
+import { getCustomers } from '../../api/customers.js'
 
 export default function CarsPage() {
   const { token } = useAuth()
@@ -15,37 +15,23 @@ export default function CarsPage() {
   const [loading, setLoading] = useState(false)
 
   async function load() {
-    setLoading(true)
-    try {
-      // API CALL: GET /cars?search=...
-      const data = await getCars(token, search)
-      const carList = Array.isArray(data) ? (Array.isArray(data[0]) ? data[0] : data) : []
-      // Normalize cars data
-      const normalizedCars = carList.map(car => ({
-        id: car.car_id,
-        make: car.make,
-        model: car.model,
-        year: car.year,
-        plate_number: car.plate_number,
-        chassis_number: car.body_number,
-        engine_number: car.engine_number,
-        customer_id: car.fk_car_customer_id,
-        customer_name: car.customer_name || 'Unknown'
-      }))
-      setCars(normalizedCars)
-    } catch (err) {
-      setError(err.message)
-    } finally {
-      setLoading(false)
-    }
+  setLoading(true)
+  try {
+    const data = await getCars(token, search)
+    setCars(data)
+  } catch (err) {
+    setError(err.message)
+  } finally {
+    setLoading(false)
   }
+}
 
   useEffect(() => {
     load()
   }, [search])
 
   async function handleAddCar(customerId, payload) {
-    // API CALL: POST /cars/:id
+    // API CALL: POST /cars
     await addCar(token, customerId, payload)
     setShowAddModal(false)
     load()
@@ -53,7 +39,7 @@ export default function CarsPage() {
 
   async function handleDeleteCar(car) {
     const confirmed = window.confirm(
-      `Delete ${car.make} ${car.model} (${car.plate_number}) from ${car.customer_name}? This will not delete the customer.`,
+     `Delete ${car.make} ${car.model} (${car.plate_number}) from ${car.customer?.name ?? 'this customer'}? This will not delete the customer.`,
     )
     if (!confirmed) return
 
@@ -121,10 +107,10 @@ export default function CarsPage() {
               <td className="p-3 text-slate-500">{c.plate_number}</td>
               <td className="p-3 text-slate-500">{c.chassis_number}</td>
               <td className="p-3 text-slate-500">{c.engine_number}</td>
-              <td className="p-3 text-slate-500">{c.customer_name}</td>
+              <td className="p-3 text-slate-500">{c.customer?.name ?? 'Unknown'}</td>
               <td className="p-3 text-right">
                 <div className="flex justify-end items-center gap-3">
-                  <button onClick={() => navigate(`/customers/${c.customer_id}`)} className="text-blue-600 text-xs">
+                  <button onClick={() => navigate(`/customers/${c.customerId}`)} className="text-blue-600 text-xs">
                     View owner
                   </button>
                   <button
@@ -179,8 +165,14 @@ function AddCarModal({ token, onClose, onSave }) {
     async function loadCustomers() {
       // API CALL: GET /customers?search=...
       const data = await getCustomers(token, customerSearch)
-      setCustomers(data)
-      if (!customerId && data[0]) setCustomerId(String(data[0].id))
+      const list = Array.isArray(data) ? data : (data?.customers ?? data?.customer ?? [])
+      const normalized = (Array.isArray(list) ? list : [list]).map((c) => ({
+        id: c.id ?? c.customerId,
+        name: c.name,
+        phone: c.phone ?? c.phoneNumber,
+      }))
+      setCustomers(normalized)
+      if (!customerId && normalized[0]) setCustomerId(String(normalized[0].id))
     }
     loadCustomers()
   }, [customerSearch])

@@ -3,6 +3,7 @@ import { LayoutDashboard, Users, Car, Wrench, Package, Settings, LogOut } from '
 import { useAuth } from '../context/AuthContext.jsx'
 import { useEffect, useState } from 'react'
 import { getShopName } from '../config/branding.js'
+import logo from '../assets/mekawy-logo.png'
 
 const links = [
   { to: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
@@ -33,17 +34,9 @@ export default function Sidebar() {
 
   return (
     <aside className="w-56 bg-slate-900 text-slate-200 flex flex-col h-screen">
-      <div className="px-4 py-5">
-        <div className="text-lg font-semibold tracking-wide flex items-center gap-2">
-          <Car size={20} />
-          {shopName}
-        </div>
-        <div className="brand-stripes mt-2" aria-hidden="true">
-          <span />
-          <span />
-          <span />
-        </div>
-      </div>
+     <div className="px-4 py-5">
+  <img src={logo} alt="Mekawy Bavarian Motor Works" className="w-full h-auto max-h-16 object-contain" />
+</div>
 
       <nav className="flex-1 px-2 space-y-1">
         {links.map(({ to, label, icon: Icon }) => (

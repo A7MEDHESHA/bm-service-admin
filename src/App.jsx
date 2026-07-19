@@ -34,7 +34,7 @@ export default function App() {
         </Route>
 
         {/* Print-only pages, full screen, no sidebar */}
-        <Route path="/quotation" element={<Quotation />} />
+        <Route path="/quotation/:id" element={<Quotation />} />
         <Route path="/job-order" element={<JobOrder />} />
         <Route path="/receipt/:id" element={<Receipt />} />
       </Route>

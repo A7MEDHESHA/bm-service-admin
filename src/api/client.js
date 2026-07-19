@@ -16,7 +16,9 @@ export async function apiRequest(path, { method = 'GET', body, token } = {}) {
   const data = await res.json().catch(() => null)
 
   if (!res.ok) {
-    throw new Error(data?.error || 'Something went wrong, please try again.')
+    const error = new Error(data?.message || data?.error || 'Something went wrong, please try again.')
+    error.status = res.status
+    throw error
   }
 
   return data

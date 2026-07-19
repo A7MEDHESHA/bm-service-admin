@@ -2,87 +2,90 @@ import { apiRequest } from './client.js'
 import { USE_MOCK } from './config.js'
 import { mockGetParts, mockCreatePart, mockUpdatePart } from './mockData.js'
 
+function normalizePart(p) {
+  return {
+    id: p.partId,
+    name: p.name,
+    description: p.description,
+    unit_price: Number(p.sellingPrice),
+    cost_price: Number(p.costPrice),
+    stock_quantity: p.quantity,
+    low_stock_threshold: p.minimumQuantity,
+    active: true,
+  }
+}
+
 // ------------------------------------------------------------------------------
-// Backend API endpoint: GET /parts
-// Backend returns: [ [ { part_id, description, price, quantity }, ... ] ]
+// API ENDPOINT: GET /api/parts
 // ------------------------------------------------------------------------------
 export async function getParts(token) {
   if (USE_MOCK) return mockGetParts()
-  
-  const rawParts = await apiRequest('/parts', { token })
-  const partsList = Array.isArray(rawParts) ? (Array.isArray(rawParts[0]) ? rawParts[0] : rawParts) : []
-  
-  return partsList.map(p => ({
-    id: p.part_id,
-    name: p.description,
-    unit_price: p.price,
-    stock_quantity: p.quantity,
-    active: true
-  }))
-}
-
-export async function getLowStockParts(token) {
-  if (USE_MOCK) return []
-  
-  const rawParts = await apiRequest('/parts/low-stock', { token })
-  const partsList = Array.isArray(rawParts) ? (Array.isArray(rawParts[0]) ? rawParts[0] : rawParts) : []
-  
-  return partsList.map(p => ({
-    id: p.part_id,
-    name: p.description,
-    unit_price: p.price,
-    stock_quantity: p.quantity,
-    active: true
-  }))
+  try {
+    const data = await apiRequest('/parts', { token })
+    const list = data?.parts ?? []
+    return list.map(normalizePart)
+  } catch (err) {
+    if (err.status === 404) return []
+    throw err
+  }
 }
 
 // ------------------------------------------------------------------------------
-// Backend API endpoint: POST /parts
-// Backend expects: { description, price, quantity }
+// API ENDPOINT: GET /api/parts/low-stock
+// ------------------------------------------------------------------------------
+export async function getLowStockParts(token) {
+  if (USE_MOCK) return []
+  try {
+    const data = await apiRequest('/parts/low-stock', { token })
+    const list = data?.parts ?? []
+    return list.map(normalizePart)
+  } catch (err) {
+    // Either no low-stock parts (404) or the endpoint isn't deployed yet (500)
+    return []
+  }
+}
+
+// ------------------------------------------------------------------------------
+// API ENDPOINT: POST /api/parts
+// EXPECTED BODY: { name, description?, sellingPrice, costPrice, quantity, minimumQuantity? }
 // ------------------------------------------------------------------------------
 export async function createPart(token, payload) {
   if (USE_MOCK) return mockCreatePart(payload)
-  
-  const backendPayload = {
-    description: payload.name,
-    price: payload.unit_price,
-    quantity: payload.stock_quantity
-  }
-  
-  const result = await apiRequest('/parts', { method: 'POST', body: backendPayload, token })
-  
-  return {
-    id: result.insertId,
-    name: payload.name,
-    unit_price: payload.unit_price,
-    stock_quantity: payload.stock_quantity,
-    active: true
-  }
+  const result = await apiRequest('/parts', {
+    method: 'POST',
+    token,
+    body: {
+      name: payload.name,
+      sellingPrice: Number(payload.unit_price),
+      costPrice: Number(payload.cost_price ?? payload.unit_price),
+      quantity: Number(payload.stock_quantity) || 0,
+    },
+  })
+  return normalizePart(result)
 }
 
 // ------------------------------------------------------------------------------
-// Backend API endpoint: PUT /parts/update/:id
-// Backend expects: { partId, description, price, quantity }
+// API ENDPOINT: PUT /api/parts/:id
+// EXPECTED BODY: { name?, description?, sellingPrice?, costPrice?, quantity?, minimumQuantity? }
 // ------------------------------------------------------------------------------
 export async function updatePart(token, id, payload) {
   if (USE_MOCK) return mockUpdatePart(id, payload)
-  
-  const currentPart = (await getParts(token)).find(p => p.id === Number(id))
-  
-  const backendPayload = {
-    partId: id,
-    description: payload.name ?? currentPart?.name,
-    price: payload.unit_price ?? currentPart?.unit_price,
-    quantity: payload.stock_quantity ?? currentPart?.stock_quantity
-  }
-  
-  await apiRequest(`/parts/update/${id}`, { method: 'PUT', body: backendPayload, token })
-  
-  return {
-    id: Number(id),
-    name: backendPayload.description,
-    unit_price: backendPayload.price,
-    stock_quantity: backendPayload.quantity,
-    active: true
-  }
+  const data = await apiRequest(`/parts/${id}`, {
+    method: 'PUT',
+    token,
+    body: {
+      name: payload.name,
+      sellingPrice: payload.unit_price !== undefined ? Number(payload.unit_price) : undefined,
+      quantity: payload.stock_quantity !== undefined ? Number(payload.stock_quantity) : undefined,
+    },
+  })
+  return normalizePart(data.part)
+}
+
+// ------------------------------------------------------------------------------
+// API ENDPOINT: DELETE /api/parts/:id
+// ------------------------------------------------------------------------------
+export function deletePart(token, id) {
+  if (USE_MOCK) return Promise.resolve({ success: true })
+  return apiRequest(`/parts/${id}`, { method: 'DELETE', token })
 }

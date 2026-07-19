@@ -3,6 +3,8 @@ import { useParams, useNavigate } from 'react-router-dom'
 import { Trash2, RefreshCw, ArrowLeft } from 'lucide-react'
 import { useAuth } from '../../context/AuthContext.jsx'
 import { getCustomer, deleteCustomer } from '../../api/customers.js'
+import { getInvoices } from '../../api/invoices.js'
+import { getQuotations } from '../../api/quotations.js'
 import { deleteCar } from '../../api/cars.js'
 
 export default function CustomerProfile() {
@@ -12,19 +14,40 @@ export default function CustomerProfile() {
   const [customer, setCustomer] = useState(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
+  const [visits, setVisits] = useState([])
 
   async function load() {
-    setLoading(true)
-    try {
-      // API CALL: GET /customers/:id
-      const data = await getCustomer(token, id)
-      setCustomer(data)
-    } catch (err) {
-      setError(err.message)
-    } finally {
-      setLoading(false)
-    }
+  setLoading(true)
+  try {
+    const data = await getCustomer(token, id)
+    setCustomer(data)
+
+    const [invoices, quotations] = await Promise.all([
+      getInvoices(token),
+      getQuotations(token, {}),
+    ])
+    const quotationById = new Map(quotations.map((q) => [q.id, q]))
+
+    const customerVisits = invoices
+      .map((inv) => {
+        const quotation = quotationById.get(inv.quotationId)
+        if (!quotation || quotation.customerId !== Number(id)) return null
+        return {
+          id: inv.id,
+          created_at: inv.issuedAt,
+          total: quotation.total,
+        }
+      })
+      .filter(Boolean)
+      .sort((a, b) => new Date(b.created_at) - new Date(a.created_at))
+
+    setVisits(customerVisits)
+  } catch (err) {
+    setError(err.message)
+  } finally {
+    setLoading(false)
   }
+}
 
   async function handleDeleteCustomer() {
     const confirmed = window.confirm(
@@ -123,15 +146,7 @@ export default function CustomerProfile() {
         ))}
       </div>
 
-      <h2 className="text-sm font-medium mb-2">Visit history</h2>
-      <div className="space-y-2">
-        {customer.visits?.map((v) => (
-          <div key={v.id} className="bg-white border border-slate-200 rounded-md p-3 flex justify-between text-sm">
-            <span className="text-slate-500">{new Date(v.created_at).toLocaleDateString()}</span>
-            <span className="font-medium">${v.total}</span>
-          </div>
-        ))}
-      </div>
+     
     </div>
   )
 }

@@ -4,7 +4,7 @@ import { useAuth } from '../../context/AuthContext.jsx'
 import { getServices } from '../../api/services.js'
 import { getParts } from '../../api/parts.js'
 import { getCustomer } from '../../api/customers.js'
-import { createVisit } from '../../api/visits.js'
+import { createQuotation, addQuotationLine, updateQuotation } from '../../api/quotations.js'
 import ServiceChecklist from '../../components/ServiceChecklist.jsx'
 import PartsTable from '../../components/PartsTable.jsx'
 import DiscountSelector from '../../components/DiscountSelector.jsx'
@@ -22,18 +22,14 @@ export default function ServiceOrder() {
   const [partsCatalog, setPartsCatalog] = useState([])
   const [discount, setDiscount] = useState(0)
   const [saving, setSaving] = useState(false)
+  const [error, setError] = useState('')
 
   useEffect(() => {
     async function load() {
-      // API CALL: GET /customers/:id - customer and full car details for the header
       const customerData = await getCustomer(token, customerId)
       setCustomer(customerData)
-
-      // API CALL: GET /services - catalog with prices, for the checklist
       const servicesData = await getServices(token)
       setServices(servicesData)
-
-      // API CALL: GET /parts - catalog with prices, for the "Add part" dropdown
       const partsData = await getParts(token)
       setPartsCatalog(partsData)
     }
@@ -52,7 +48,10 @@ export default function ServiceOrder() {
   }
 
   function addCustomService(newService) {
-    const custom = { id: `custom-${Date.now()}`, name: newService.name, price: newService.price }
+    // ⚠️ Backend services must already exist in the catalog (POST /api/services)
+    // to be added as a real quotation line. A purely ad-hoc custom service
+    // cannot be saved via add-line since it requires a real serviceId.
+    const custom = { id: `custom-${Date.now()}`, name: newService.name, price: newService.price, isCustom: true }
     setServices((s) => [...s, custom])
     setSelectedServices((s) => ({ ...s, [custom.id]: custom }))
   }
@@ -60,7 +59,7 @@ export default function ServiceOrder() {
   function addPart(newPart) {
     setParts((p) => [
       ...p,
-      { id: newPart.id || `custom-${Date.now()}`, name: newPart.name, unit_price: newPart.unit_price, quantity: 1 },
+      { id: newPart.id, name: newPart.name, unit_price: newPart.unit_price, quantity: 1 },
     ])
   }
 
@@ -75,32 +74,63 @@ export default function ServiceOrder() {
   const discountAmount = subtotal * (discount / 100)
   const total = subtotal - discountAmount
 
-  function handleQuotation() {
-    // No backend call - a quotation is just a printable estimate built from
-    // whatever is currently checked. Nothing is saved.
-    navigate('/quotation', {
-      state: { customer, car, services: serviceList, parts, subtotal, discount, discountAmount, total },
+  // ------------------------------------------------------------------------
+  // Builds the quotation on the backend for real: creates the quotation,
+  // then adds each selected service/part as a line (skips any custom/ad-hoc
+  // service that has no real serviceId, since the backend requires one).
+  // ------------------------------------------------------------------------
+  async function buildQuotationOnBackend() {
+  // Create with discount 0 first - lines will be added incrementally next,
+  // and setting the real discount too early can make an intermediate
+  // subtotal (before all lines exist) go negative and get rejected.
+  const quotation = await createQuotation(token, {
+    customerId: customer.id,
+    carId: car.id,
+    discount: 0,
+  })
+
+  for (const s of serviceList) {
+    if (s.isCustom) continue // no real serviceId - can't be saved as a line
+    await addQuotationLine(token, {
+      quotationId: quotation.id,
+      type: 'SERVICE',
+      serviceId: s.id,
+      quantity: 1,
     })
   }
 
+  for (const p of parts) {
+    await addQuotationLine(token, {
+      quotationId: quotation.id,
+      type: 'PART',
+      partId: p.id,
+      quantity: p.quantity,
+    })
+  }
+
+  // Now that the full subtotal exists, apply the real discount - this
+  // triggers one final recalculation against the complete subtotal.
+  if (discountAmount > 0) {
+    await updateQuotation(token, quotation.id, { discount: discountAmount })
+  }
+
+  return quotation.id
+}
   function handleJobOrder() {
-    // No backend call either - the job order only needs customer + car info,
-    // which is already loaded on this page.
+    // Job order creation is not yet wired up on the backend (commented out
+    // server-side). This stays a client-side printable preview only, using
+    // customer + car info already loaded on this page.
     navigate('/job-order', { state: { customer, car } })
   }
 
   async function handleConfirm() {
+    setError('')
     setSaving(true)
     try {
-      // API CALL: POST /visits - the ONLY action that actually saves the order
-      const visit = await createVisit(token, {
-        customer_id: customer.id,
-        car_id: car.id,
-        services: serviceList.map((s) => ({ service_id: s.id, price: s.price })),
-        parts: parts.map((p) => ({ part_id: p.id, quantity: p.quantity, unit_price: p.unit_price })),
-        discount_percent: discount,
-      })
-      navigate(`/receipt/${visit.id}`, { state: visit })
+      const quotationId = await buildQuotationOnBackend()
+      navigate(`/quotation/${quotationId}`)
+    } catch (err) {
+      setError(err.message)
     } finally {
       setSaving(false)
     }
@@ -121,7 +151,7 @@ export default function ServiceOrder() {
           <div>
             <p className="text-sm font-medium">{customer.name}</p>
             <p className="text-xs text-slate-500">
-              {car.make} {car.model}, {car.color} - year {car.year} - plate {car.plate_number}
+              {car.make} {car.model} - year {car.year} - plate {car.plate_number}
             </p>
             <p className="text-xs text-slate-500">
               chassis {car.chassis_number} - engine {car.engine_number}
@@ -129,10 +159,9 @@ export default function ServiceOrder() {
           </div>
         </div>
 
+        {error && <p className="text-sm text-red-600 mb-3">{error}</p>}
+
         <div className="flex gap-2 mb-4">
-          <button onClick={handleQuotation} className="flex-1 text-sm border border-slate-300 rounded-md py-2">
-            Create quotation
-          </button>
           <button onClick={handleJobOrder} className="flex-1 text-sm border border-slate-300 rounded-md py-2">
             Create job order
           </button>
@@ -167,7 +196,7 @@ export default function ServiceOrder() {
           disabled={saving}
           className="w-full mt-4 bg-blue-600 text-white rounded-md py-2 text-sm disabled:opacity-50"
         >
-          {saving ? 'Saving...' : 'Confirm and print receipt'}
+          {saving ? 'Saving...' : 'Save order & review quotation'}
         </button>
       </div>
     </div>

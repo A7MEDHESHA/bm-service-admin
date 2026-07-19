@@ -104,7 +104,7 @@ export default function ServicesPage() {
             </tr>
           )}
 
-          {services.map((s) => (
+          {services.filter((s) => s.active !== false).map((s) => (
             <tr key={s.id} className="border-t border-slate-100">
               {editingId === s.id ? (
                 <>
